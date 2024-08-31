@@ -1,0 +1,398 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Home, Zap, Grid, Palette, UtensilsCrossed, Droplet, Save, Trash } from 'lucide-react';
+import { PieChart, Pie, Cell, BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+const renovationCategories = [
+  {
+    id: 'general',
+    name: 'כללי',
+    icon: Home,
+    subcategories: [
+      { id: 'planning', name: 'תכנון ועיצוב', price: 5000 },
+      { id: 'permits', name: 'היתרים ואישורים', price: 3000 },
+    ]
+  },
+  {
+    id: 'infrastructure',
+    name: 'תשתיות',
+    icon: Zap,
+    subcategories: [
+      { id: 'electrical', name: 'חשמל', price: 10000 },
+      { id: 'plumbing', name: 'אינסטלציה', price: 8000 },
+      { id: 'airConditioning', name: 'מיזוג אוויר', price: 15000 },
+    ]
+  },
+  {
+    id: 'flooring',
+    name: 'ריצוף',
+    icon: Grid,
+    subcategories: [
+      { id: 'tiles', name: 'אריחים', price: 200 },
+      { id: 'parquet', name: 'פרקט', price: 300 },
+      { id: 'marble', name: 'שיש', price: 500 },
+    ]
+  },
+  {
+    id: 'walls',
+    name: 'קירות ותקרות',
+    icon: Palette,
+    subcategories: [
+      { id: 'painting', name: 'צביעה', price: 30 },
+      { id: 'wallpaper', name: 'טפטים', price: 50 },
+      { id: 'falseceiling', name: 'תקרה אקוסטית', price: 200 },
+    ]
+  },
+  {
+    id: 'kitchen',
+    name: 'מטבח',
+    icon: UtensilsCrossed,
+    subcategories: [
+      { id: 'cabinets', name: 'ארונות מטבח', price: 20000 },
+      { id: 'countertops', name: 'משטח עבודה', price: 5000 },
+      { id: 'appliances', name: 'מכשירי חשמל', price: 10000 },
+    ]
+  },
+  {
+    id: 'bathroom',
+    name: 'חדר רחצה',
+    icon: Droplet,
+    subcategories: [
+      { id: 'sanitary', name: 'כלים סניטריים', price: 8000 },
+      { id: 'shower', name: 'מקלחון', price: 3000 },
+      { id: 'bathroomCabinets', name: 'ארונות אמבטיה', price: 4000 },
+    ]
+  },
+];
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
+const RenovationCostCalculator = () => {
+  const [activeTab, setActiveTab] = useState("details");
+  const [area, setArea] = useState('');
+  const [roomCount, setRoomCount] = useState('');
+  const [bathroomCount, setBathroomCount] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState({});
+  const [totalCost, setTotalCost] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [scenarios, setScenarios] = useState([]);
+  const [budget, setBudget] = useState('');
+
+  useEffect(() => {
+    const tabIndex = ["details", ...renovationCategories.map(cat => cat.id), "summary", "comparison", "visualization"].indexOf(activeTab);
+    setProgress((tabIndex / (renovationCategories.length + 4)) * 100);
+  }, [activeTab]);
+
+  const handleCategoryChange = (categoryId, subcategoryId, isChecked) => {
+    setSelectedCategories(prev => ({
+      ...prev,
+      [categoryId]: {
+        ...prev[categoryId],
+        [subcategoryId]: isChecked
+      }
+    }));
+  };
+
+  const calculateCost = () => {
+    let cost = 0;
+    Object.entries(selectedCategories).forEach(([categoryId, subcategories]) => {
+      Object.entries(subcategories).forEach(([subcategoryId, isSelected]) => {
+        if (isSelected) {
+          const category = renovationCategories.find(cat => cat.id === categoryId);
+          const subcategory = category.subcategories.find(sub => sub.id === subcategoryId);
+          if (subcategory.price) {
+            if (categoryId === 'bathroom') {
+              cost += subcategory.price * Number(bathroomCount || 1);
+            } else if (subcategory.price < 1000) {
+              cost += subcategory.price * Number(area || 1);
+            } else {
+              cost += subcategory.price;
+            }
+          }
+        }
+      });
+    });
+    cost += Number(roomCount || 0) * 5000;
+    setTotalCost(cost);
+    return cost;
+  };
+
+  const saveScenario = () => {
+    const newScenario = {
+      id: Date.now(),
+      name: `תרחיש ${scenarios.length + 1}`,
+      area,
+      roomCount,
+      bathroomCount,
+      selectedCategories,
+      totalCost: calculateCost()
+    };
+    setScenarios([...scenarios, newScenario]);
+  };
+
+  const deleteScenario = (id) => {
+    setScenarios(scenarios.filter(scenario => scenario.id !== id));
+  };
+
+  const optimizeBudget = () => {
+    const availableBudget = Number(budget);
+    let optimizedCategories = {};
+    let remainingBudget = availableBudget;
+
+    const sortedCategories = renovationCategories.sort((a, b) => {
+      const priorityOrder = ['infrastructure', 'bathroom', 'kitchen', 'flooring', 'walls', 'general'];
+      return priorityOrder.indexOf(a.id) - priorityOrder.indexOf(b.id);
+    });
+
+    for (const category of sortedCategories) {
+      optimizedCategories[category.id] = {};
+      for (const subcategory of category.subcategories) {
+        let subcategoryCost = subcategory.price;
+        if (category.id === 'bathroom') {
+          subcategoryCost *= Number(bathroomCount || 1);
+        } else if (subcategory.price < 1000) {
+          subcategoryCost *= Number(area || 1);
+        }
+
+        if (remainingBudget >= subcategoryCost) {
+          optimizedCategories[category.id][subcategory.id] = true;
+          remainingBudget -= subcategoryCost;
+        } else {
+          optimizedCategories[category.id][subcategory.id] = false;
+        }
+      }
+    }
+
+    setSelectedCategories(optimizedCategories);
+    calculateCost();
+  };
+
+  const renderTabContent = (tabId) => {
+    if (tabId === "details") {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6"
+        >
+          <div>
+            <Label htmlFor="area" className="text-lg font-semibold mb-2 block">שטח הדירה (במ"ר)</Label>
+            <Input
+              id="area"
+              type="number"
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+              placeholder="הכנס שטח"
+              className="text-xl p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 transition-all duration-300 text-right"
+            />
+          </div>
+          <div>
+            <Label htmlFor="roomCount" className="text-lg font-semibold mb-2 block">מספר חדרים</Label>
+            <Input
+              id="roomCount"
+              type="number"
+              value={roomCount}
+              onChange={(e) => setRoomCount(e.target.value)}
+              placeholder="הכנס מספר חדרים"
+              className="text-xl p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 transition-all duration-300 text-right"
+            />
+          </div>
+          <div>
+            <Label htmlFor="bathroomCount" className="text-lg font-semibold mb-2 block">מספר חדרי אמבטיה</Label>
+            <Input
+              id="bathroomCount"
+              type="number"
+              value={bathroomCount}
+              onChange={(e) => setBathroomCount(e.target.value)}
+              placeholder="הכנס מספר חדרי אמבטיה"
+              className="text-xl p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 transition-all duration-300 text-right"
+            />
+          </div>
+          <div>
+            <Label htmlFor="budget" className="text-lg font-semibold mb-2 block">תקציב (בש"ח)</Label>
+            <Input
+              id="budget"
+              type="number"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              placeholder="הכנס תקציב"
+              className="text-xl p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 transition-all duration-300 text-right"
+            />
+          </div>
+          <Button onClick={optimizeBudget} className="w-full bg-green-500 hover:bg-green-600 text-white">
+            אופטימיזציה לפי תקציב
+          </Button>
+        </motion.div>
+      );
+    } else if (tabId === "summary") {
+      return (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 1.1 }}
+          transition={{ duration: 0.3 }}
+          className="text-center"
+        >
+          <h3 className="text-3xl font-bold mb-4">סיכום העלויות</h3>
+          <div className="text-5xl font-bold text-blue-600">
+            ₪{totalCost.toLocaleString()}
+          </div>
+          <p className="mt-4 text-gray-600">זוהי הערכה ראשונית. המחיר הסופי עשוי להשתנות.</p>
+          <Button onClick={saveScenario} className="mt-6 bg-blue-500 hover:bg-blue-600 text-white">
+            <Save className="mr-2" /> שמור תרחיש
+          </Button>
+        </motion.div>
+      );
+    } else if (tabId === "comparison") {
+      return (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6"
+        >
+          <h3 className="text-2xl font-bold mb-4">השוואת תרחישים</h3>
+          {scenarios.map((scenario, index) => (
+            <Card key={scenario.id} className="p-4 bg-white shadow-md rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-xl font-semibold">{scenario.name}</h4>
+                <Button onClick={() => deleteScenario(scenario.id)} variant="ghost" className="text-red-500">
+                  <Trash size={20} />
+                </Button>
+              </div>
+              <p>שטח: {scenario.area} מ"ר</p>
+              <p>מספר חדרים: {scenario.roomCount}</p>
+              <p>מספר חדרי אמבטיה: {scenario.bathroomCount}</p>
+              <p className="text-xl font-bold text-blue-600 mt-2">
+                עלות כוללת: ₪{scenario.totalCost.toLocaleString()}
+              </p>
+            </Card>
+          ))}
+        </motion.div>
+      );
+    } else if (tabId === "visualization") {
+      const pieData = renovationCategories.map(category => ({
+        name: category.name,
+        value: Object.entries(selectedCategories[category.id] || {})
+          .filter(([, isSelected]) => isSelected)
+          .reduce((sum, [subcategoryId]) => {
+            const subcategory = category.subcategories.find(sub => sub.id === subcategoryId);
+            if (subcategory) {
+              if (category.id === 'bathroom') {
+                return sum + subcategory.price * Number(bathroomCount || 1);
+              } else if (subcategory.price < 1000) {
+                return sum + subcategory.price * Number(area || 1);
+              }
+              return sum + subcategory.price;
+            }
+            return sum;
+          }, 0)
+      })).filter(data => data.value > 0);
+
+      const barData = renovationCategories.flatMap(category =>
+        category.subcategories
+          .filter(subcategory => selectedCategories[category.id]?.[subcategory.id])
+          .map(subcategory => ({
+            name: subcategory.name,
+            עלות: category.id === 'bathroom'
+              ? subcategory.price * Number(bathroomCount || 1)
+              : subcategory.price < 1000
+                ? subcategory.price * Number(area || 1)
+                : subcategory.price
+          }))
+      );
+
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6"
+        >
+          <h3 className="text-2xl font-bold mb-4">ויזואליזציה של העלויות</h3>
+
+          <div className="flex flex-col lg:flex-row gap-6">
+            <div className="lg:w-1/2">
+              <h4 className="text-xl font-semibold mb-2">פאי: עלות לפי קטגוריה</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="lg:w-1/2">
+              <h4 className="text-xl font-semibold mb-2">בר: עלות לפי תת-קטגוריה</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <RechartsBarChart data={barData}>
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="עלות" fill="#82ca9d" />
+                </RechartsBarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </motion.div>
+      );
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-center text-3xl font-bold">מחשבון עלות שיפוץ</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="flex justify-center space-x-2">
+            <TabsTrigger value="details">פרטים</TabsTrigger>
+            {renovationCategories.map((category) => (
+              <TabsTrigger key={category.id} value={category.id}>{category.name}</TabsTrigger>
+            ))}
+            <TabsTrigger value="summary">סיכום</TabsTrigger>
+            <TabsTrigger value="comparison">השוואה</TabsTrigger>
+            <TabsTrigger value="visualization">ויזואליזציה</TabsTrigger>
+          </TabsList>
+
+          <TabsContent>
+            <AnimatePresence exitBeforeEnter>
+              {renderTabContent(activeTab)}
+            </AnimatePresence>
+          </TabsContent>
+        </Tabs>
+        <div className="mt-4">
+          <Progress value={progress} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default RenovationCostCalculator;
